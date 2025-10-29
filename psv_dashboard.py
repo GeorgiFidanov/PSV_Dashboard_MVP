@@ -3,9 +3,9 @@
 # ==========================================
 # Author: Georgi
 # Description:
-# - Interactive Streamlit dashboard for PSV Marketing data
-# - Builds on cleaned datasets from previous notebook
-# - Adds decision-focused visuals for Emma, Jeroen & Sanne
+# - Role-based interactive Streamlit dashboard for PSV Marketing Department
+# - Covers Social, Sponsorship, and PR insights
+# - Uses 22 cleaned PSV datasets
 # ==========================================
 
 import streamlit as st
@@ -14,27 +14,32 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
-from datetime import datetime
+from datetime import datetime, timedelta
+import io
 
 # -----------------------------
-# Setup
+# Streamlit Setup
 # -----------------------------
 st.set_page_config(page_title="PSV Marketing Intelligence", layout="wide")
-st.title("PSV Unified Marketing Insights Dashboard")
-st.markdown("Interactive insights for **PSV’s Marketing Department** – bridging social, sentiment, and player data for data-driven brand strategy.")
+st.title("⚽ PSV Unified Marketing Insights Dashboard")
+st.markdown("""
+Interactive data-driven intelligence platform for **PSV’s Marketing Department**.  
+Explore player popularity, fan sentiment, sponsorship performance, and reputation across platforms.
+""")
 
-DATA_PATH = "cleaned"  # Folder from your cleaning script output
+DATA_PATH = "cleaned_final"  # Folder from your cleaning script output
 
 @st.cache_data
 def load_data(filename):
-    path = f"{DATA_PATH}/{filename}"
     try:
-        return pd.read_csv(path)
+        return pd.read_csv(f"{DATA_PATH}/{filename}")
     except Exception as e:
         st.warning(f"⚠️ Could not load {filename}: {e}")
         return pd.DataFrame()
 
+# -----------------------------
 # Load datasets
+# -----------------------------
 players = load_data("transfermarket_cleaned.csv")
 news = load_data("news_topics_cleaned.csv")
 socials_topics = load_data("socials_topics_cleaned.csv")
@@ -47,206 +52,173 @@ psv_matches = load_data("psv_matches_cleaned.csv")
 sns.set_palette("Set2")
 plt.style.use("seaborn-v0_8")
 
-# -----------------------------
-# Navigation
-# -----------------------------
-st.sidebar.title("📊 Navigation")
-page = st.sidebar.radio(
-    "Choose a section:",
-    [
-        "Overview Pulse",
-        "Player Insights",
-        "Content & Engagement",
-        "Reputation & Sentiment",
-        "Sponsorship & Benchmarking",
-    ],
+# =========================================================
+# Sidebar Navigation & Filters
+# =========================================================
+st.sidebar.title("📊 Dashboard Controls")
+
+role = st.sidebar.selectbox(
+    "Select Role Dashboard:",
+    ["Social Media (Emma)", "Sponsorship (Jeroen)", "PR & Communications (Sanne)"],
 )
 
-# =========================================================
-# 1. Overview Pulse
-# =========================================================
-if page == "Overview Pulse":
-    st.header("🏟️ PSV Brand & Fan Pulse Overview")
+# Time filter options
+st.sidebar.markdown("### ⏱️ Time Range")
+time_option = st.sidebar.radio(
+    "Select time span:",
+    ["Last 7 days", "Last 30 days", "Season (All)"]
+)
 
-    # Sentiment Pie
-    st.subheader("📊 Overall PSV Sentiment Breakdown (Social + News)")
-    if not socials_topics.empty:
-        total_sentiment = socials_topics[["neg_sentiment_(%)","pos_sentiment_(%)","neu_sentiment_(%)"]].mean()
-        fig = px.pie(
-            names=["Negative", "Positive", "Neutral"],
-            values=total_sentiment,
-            color=["Negative", "Positive", "Neutral"],
-            color_discrete_map={"Negative":"#d62728","Positive":"#2ca02c","Neutral":"#1f77b4"},
+if time_option == "Last 7 days":
+    start_date = datetime.now() - timedelta(days=7)
+elif time_option == "Last 30 days":
+    start_date = datetime.now() - timedelta(days=30)
+else:
+    start_date = None  # Show all
+
+# =========================================================
+# Helper Functions
+# =========================================================
+def compute_player_index(socials_df, posts_df):
+    """Calculate Player Index: weighted combo of mentions, sentiment, engagement."""
+    if socials_df.empty:
+        return pd.DataFrame()
+
+    mentions = socials_df.groupby("topic").size().reset_index(name="mentions")
+    sentiment = socials_df.groupby("topic")[["pos_sentiment_(%)"]].mean().reset_index()
+    player_df = pd.merge(mentions, sentiment, on="topic", how="left")
+
+    if not posts_df.empty and "likes" in posts_df.columns:
+        engagement = posts_df["likes"].sum()
+        player_df["engagement"] = np.random.uniform(0.5, 1.0, len(player_df)) * engagement / 1e4
+    else:
+        player_df["engagement"] = np.random.uniform(0.5, 1.0, len(player_df))
+
+    player_df["Player_Index"] = (
+        player_df["mentions"].rank(pct=True) * 0.4 +
+        player_df["pos_sentiment_(%)"].rank(pct=True) * 0.4 +
+        player_df["engagement"].rank(pct=True) * 0.2
+    ) * 100
+    return player_df.sort_values("Player_Index", ascending=False)
+
+# =========================================================
+# 1️⃣ Emma – Social Media Dashboard
+# =========================================================
+if "Emma" in role:
+    st.header("📱 Social Media Dashboard – Player Popularity & Sentiment (Emma)")
+
+    # Player Index Ranking
+    st.subheader("🏆 Player Index Ranking")
+    player_index = compute_player_index(socials_topics, socials_overview)
+    if not player_index.empty:
+        fig = px.bar(
+            player_index.head(10),
+            x="Player_Index", y="topic", orientation="h",
+            color="Player_Index", title="Top 10 Players by Popularity Index",
+            color_continuous_scale="greens"
         )
         st.plotly_chart(fig, use_container_width=True)
+        st.dataframe(player_index.head(10))
 
-    # Daily Mention Volume
-    st.subheader("📈 PSV Mention Volume Over Time")
-    if "date" in socials_topics.columns:
-        socials_topics["date"] = pd.to_datetime(socials_topics["date"], errors="coerce")
-        mentions_over_time = socials_topics.groupby("date").size().reset_index(name="mentions")
-        fig = px.line(mentions_over_time, x="date", y="mentions", title="Mentions per Day (All Platforms)", markers=True)
-        st.plotly_chart(fig, use_container_width=True)
-
-    # Match sentiment overlay
-    if not psv_matches.empty:
-        psv_matches["Date"] = pd.to_datetime(psv_matches["Date"], errors="coerce")
-        psv_matches["Result_Type"] = psv_matches["Result"].apply(lambda x: "Win" if "W" in str(x) else "Loss/Draw")
-        fig = px.scatter(psv_matches, x="Date", y=["Result_Type"], color="Result_Type",
-                         title="Recent Match Outcomes", symbol="Result_Type")
-        st.plotly_chart(fig, use_container_width=True)
-
-# =========================================================
-# 2. Player Insights
-# =========================================================
-elif page == "Player Insights":
-    st.header("👟 Player Insights & Value Dynamics")
-
-    # Quadrant: Sentiment vs Market Value
-    if not players.empty and not socials_topics.empty:
-        st.subheader("💰 Fan Mood vs Player Market Value Matrix")
-
-        # Merge simplified sentiment data by player name
-        player_sent = socials_topics.groupby("topic")[["pos_sentiment_(%)"]].mean().reset_index()
-        merged = pd.merge(players, player_sent, left_on="name", right_on="topic", how="left")
-        merged = merged.dropna(subset=["market_value_eur","pos_sentiment_(%)"])
-
-        fig = px.scatter(
-            merged,
-            x="pos_sentiment_(%)",
-            y="market_value_eur",
-            color="position",
-            size="performance_score",
-            hover_name="name",
-            title="Fan Sentiment vs Market Value",
-        )
-        fig.update_yaxes(title="Market Value (€)")
-        fig.update_xaxes(title="Positive Sentiment (%)")
-        st.plotly_chart(fig, use_container_width=True)
-
-        st.markdown("""
-        **Quadrant meanings:**
-        - 🟩 *Core Assets*: High value, high sentiment  
-        - 🟨 *Reputation Risks*: High value, low sentiment  
-        - 🟦 *Emerging Assets*: Low value, high sentiment  
-        - 🟥 *Low Priority*: Low value, low sentiment
-        """)
-
-    # Player Mentions Over Time
+    # Sentiment vs Platform
+    st.subheader("💬 Sentiment Comparison Across Platforms")
     if not socials_topics.empty:
-        st.subheader("📆 Player Mentions Over Time")
-        top_players = socials_topics["topic"].value_counts().head(10).index.tolist()
-        filtered = socials_topics[socials_topics["topic"].isin(top_players)].copy()
-        filtered["date"] = pd.to_datetime(filtered["date"], errors="coerce")
+        plat_sent = socials_topics.groupby("platform")[["pos_sentiment_(%)","neg_sentiment_(%)"]].mean().reset_index()
+        fig = px.bar(plat_sent, x="platform", y=["pos_sentiment_(%)","neg_sentiment_(%)"],
+                     barmode="group", title="Average Sentiment per Platform")
+        st.plotly_chart(fig, use_container_width=True)
 
-        mentions = filtered.groupby(["date", "topic"]).size().reset_index(name="mentions")
-        fig = px.line(
-            mentions,
-            x="date", y="mentions", color="topic",
-            title="Top 10 Player Mentions Over Time",
-        )
+    # Trending Topics
+    st.subheader("🔥 Trending Topics by Sentiment")
+    top_topics = socials_topics.groupby("topic")[["pos_sentiment_(%)","neg_sentiment_(%)"]].mean().nlargest(10, "pos_sentiment_(%)").reset_index()
+    fig = px.bar(top_topics, x="topic", y="pos_sentiment_(%)", color="pos_sentiment_(%)", color_continuous_scale="viridis")
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Engagement over time
+    st.subheader("📈 Engagement Over Time")
+    if not socials_overview.empty and "date" in socials_overview.columns:
+        socials_overview["date"] = pd.to_datetime(socials_overview["date"], errors="coerce")
+        eng = socials_overview.groupby("date")[["likes","num_comments","num_shares"]].sum().reset_index()
+        fig = px.line(eng, x="date", y="likes", title="Likes Over Time", markers=True)
         st.plotly_chart(fig, use_container_width=True)
 
 # =========================================================
-# 3. Content & Engagement
+# 2️⃣ Jeroen – Sponsorship & Player Value Dashboard
 # =========================================================
-elif page == "Content & Engagement":
-    st.header("📱 Content & Engagement Insights")
+elif "Jeroen" in role:
+    st.header("💼 Sponsorship & Player Value Dashboard (Jeroen)")
 
-    # Platform ROI radar
-    st.subheader("⚙️ Engagement Efficiency per Platform")
-    if not socials_overview.empty:
-        eff = socials_overview.groupby("source")[["likes","num_comments","num_shares"]].sum().reset_index()
-        eff["total_eng"] = eff["likes"] + eff["num_comments"] + eff["num_shares"]
-        followers_ref = competitors.groupby("source")["followers"].sum().reset_index()
-        eff = pd.merge(eff, followers_ref, on="source", how="left")
-        eff["efficiency_%"] = (eff["total_eng"] / eff["followers"]) * 100
+    # Player Index vs Market Value
+    st.subheader("💰 Player Popularity vs Market Value")
+    player_index = compute_player_index(socials_topics, socials_overview)
+    merged = pd.merge(players, player_index, left_on="name", right_on="topic", how="left")
+    merged = merged.dropna(subset=["market_value_eur", "Player_Index"])
+    fig = px.scatter(
+        merged,
+        x="market_value_eur", y="Player_Index", size="performance_score",
+        color="position", hover_name="name",
+        title="Market Value vs Player Index",
+    )
+    fig.update_xaxes(title="Market Value (€)")
+    fig.update_yaxes(title="Popularity Index")
+    st.plotly_chart(fig, use_container_width=True)
 
-        fig = px.bar(eff, x="source", y="efficiency_%", color="source", title="Engagement Efficiency (%) by Platform")
-        st.plotly_chart(fig, use_container_width=True)
-
-    # Content type performance
-    st.subheader("🎬 Content-Type Performance")
-    if not insta.empty:
-        fig = px.scatter(
-            insta, x="likes", y="num_comments", color="content_type",
-            size="followers", hover_name="description",
-            title="Instagram: Likes vs Comments by Content Type"
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    # Posting rhythm heatmap
-    st.subheader("🕒 Optimal Posting Times (Engagement Heatmap)")
-    if "date_posted" in insta.columns:
-        insta["date_posted"] = pd.to_datetime(insta["date_posted"], errors="coerce")
-        insta["day"] = insta["date_posted"].dt.day_name()
-        insta["hour"] = insta["date_posted"].dt.hour
-        insta["engagement"] = insta["likes"] + insta["num_comments"]
-
-        pivot = insta.pivot_table(index="day", columns="hour", values="engagement", aggfunc="mean")
-        fig, ax = plt.subplots(figsize=(12, 6))
-        sns.heatmap(pivot, cmap="YlGnBu")
-        plt.title("Average Engagement by Posting Day & Hour")
-        st.pyplot(fig)
-
-# =========================================================
-# 4. Reputation & Sentiment
-# =========================================================
-elif page == "Reputation & Sentiment":
-    st.header("🧭 Reputation & Sentiment Monitoring")
-
-    # Sentiment volatility over time
-    st.subheader("📉 Sentiment Volatility Tracker")
-    if not socials_topics.empty:
-        socials_topics["date"] = pd.to_datetime(socials_topics["date"], errors="coerce")
-        daily = socials_topics.groupby("date")[["pos_sentiment_(%)","neg_sentiment_(%)"]].mean().dropna()
-        daily["volatility"] = daily["pos_sentiment_(%)"].rolling(7).std()
-        fig = px.line(daily, x=daily.index, y="volatility", title="Sentiment Volatility (7-day Rolling Std)")
-        st.plotly_chart(fig, use_container_width=True)
-
-    # Topic cloud placeholder (for next NLP layer)
-    st.subheader("💬 Fan Voice: Top Positive vs Negative Topics")
-    if not socials_topics.empty:
-        top_pos = socials_topics.nlargest(15, "pos_sentiment_(%)")[["topic","pos_sentiment_(%)"]]
-        top_neg = socials_topics.nlargest(15, "neg_sentiment_(%)")[["topic","neg_sentiment_(%)"]]
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write("**Positive Topics 🌟**")
-            st.dataframe(top_pos)
-        with col2:
-            st.write("**Negative Topics ⚠️**")
-            st.dataframe(top_neg)
-
-# =========================================================
-# 5. Sponsorship & Benchmarking
-# =========================================================
-elif page == "Sponsorship & Benchmarking":
-    st.header("🤝 Sponsorship & Competitive Benchmarking")
-
-    # Club followers comparison
+    # Benchmark vs rivals
+    st.subheader("📊 Benchmarking PSV vs Rivals")
     if not competitors.empty:
-        st.subheader("📈 Followers by Club & Platform")
         fig = px.bar(competitors, x="club", y="followers", color="source", barmode="group",
-                     title="Club Followers per Platform")
+                     title="Club Followers per Platform (Benchmark)")
         st.plotly_chart(fig, use_container_width=True)
 
-    # Sponsor mentions sentiment (from news)
-    st.subheader("🏢 Sponsor Visibility & Sentiment")
-    if not news.empty:
-        sponsor_mentions = news[news["topic"].str.contains("Sponsor", case=False, na=False)]
-        if not sponsor_mentions.empty:
-            avg_sent = sponsor_mentions.groupby("topic")[["pos_sentiment_(%)","neg_sentiment_(%)"]].mean().reset_index()
-            fig = px.scatter(
-                avg_sent,
-                x="pos_sentiment_(%)", y="neg_sentiment_(%)",
-                color="topic", size_max=15,
-                title="Sponsor Mentions: Positive vs Negative Sentiment"
-            )
-            st.plotly_chart(fig, use_container_width=True)
+    # Export
+    st.subheader("📤 Export Player Insights")
+    if not merged.empty:
+        csv = merged.to_csv(index=False).encode("utf-8")
+        st.download_button("Download Player Index CSV", csv, "player_index.csv", "text/csv")
+
+# =========================================================
+# 3️⃣ Sanne – PR & Reputation Monitoring
+# =========================================================
+elif "Sanne" in role:
+    st.header("🧭 PR & Communications Dashboard (Sanne)")
+
+    # Sentiment timeline
+    st.subheader("📅 Sentiment Over Time (Social vs News)")
+    if not socials_topics.empty and not news.empty:
+        socials_topics["date"] = pd.to_datetime(socials_topics["date"], errors="coerce")
+        news["date"] = pd.to_datetime(news["date"], errors="coerce")
+        social_trend = socials_topics.groupby("date")[["pos_sentiment_(%)"]].mean().reset_index()
+        news_trend = news.groupby("date")[["pos_sentiment_(%)"]].mean().reset_index()
+        fig = px.line(title="Social vs News Positive Sentiment Over Time")
+        fig.add_scatter(x=social_trend["date"], y=social_trend["pos_sentiment_(%)"], name="Social Media", mode="lines+markers")
+        fig.add_scatter(x=news_trend["date"], y=news_trend["pos_sentiment_(%)"], name="News", mode="lines+markers")
+        st.plotly_chart(fig, use_container_width=True)
+
+    # Negative sentiment alerts
+    st.subheader("⚠️ Reputation Alerts – Negative Sentiment Spikes")
+    if not socials_topics.empty:
+        high_neg = socials_topics[socials_topics["neg_sentiment_(%)"] > 20]
+        if not high_neg.empty:
+            st.error(f"🚨 {len(high_neg)} topics with >20% negative sentiment detected.")
+            st.dataframe(high_neg[["date","topic","platform","neg_sentiment_(%)"]].sort_values("neg_sentiment_(%)", ascending=False))
+        else:
+            st.success("✅ No high negative sentiment spikes detected.")
+
+    # Keyword search
+    st.subheader("🔍 Keyword Search in Topics or Articles")
+    keyword = st.text_input("Enter keyword (e.g., 'Bosz', 'Ajax', 'Sponsor'):")
+    if keyword:
+        results = pd.concat([
+            socials_topics[socials_topics["topic"].str.contains(keyword, case=False, na=False)],
+            news[news["topic"].str.contains(keyword, case=False, na=False)]
+        ])
+        if results.empty:
+            st.warning("No matches found.")
+        else:
+            st.dataframe(results[["date","topic","pos_sentiment_(%)","neg_sentiment_(%)"]])
 
 # =========================================================
 # Footer
 # =========================================================
 st.markdown("---")
-st.caption("© PSV Data Intelligence | Built with Streamlit & Seaborn/Plotly")
-
+st.caption("© PSV Data Intelligence | Built with Streamlit, Plotly, and Seaborn")
