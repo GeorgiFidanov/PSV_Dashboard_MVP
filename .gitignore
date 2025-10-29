@@ -1,1 +1,5 @@
 /.streamlit
+/data
+/.ipynb_checkpoints
+/psv_dashboard/data
+/__pycache__
