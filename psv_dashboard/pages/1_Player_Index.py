@@ -32,9 +32,19 @@ st.subheader("💰 Market Value Correlation (Sponsors View)")
 if not players.empty:
     merged = pd.merge(players.rename(columns=str.lower), pi, left_on="name", right_on="player", how="left")
     merged = merged.dropna(subset=["market_value_eur","player_index"])
-    fig2 = px.scatter(merged, x="market_value_eur", y="player_index", color="position",
-                      hover_name="name", title="Market Value vs Player Popularity Index (€)")
+      
+    fig2 = px.scatter(
+    merged, 
+    x="market_value_eur", 
+    y="player_index", 
+    color="position",
+    hover_name="name", 
+    title="Market Value vs Player Popularity Index (€)",
+    size="market_value_eur",  # size the dots by market value
+    size_max=60               # make the dots clearly visible
+    )
     st.plotly_chart(fig2, use_container_width=True)
+
 
 c1, c2 = st.columns(2)
 with c1:

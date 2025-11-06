@@ -52,7 +52,11 @@ def compute_player_index(players, social, news, posts):
         merged["pos_sentiment_(%)"].rank(pct=True) * 0.4 +
         merged["engagement"].rank(pct=True) * 0.2
     ) * 100
-    return merged.reset_index().rename(columns={"index": "player"}).sort_values("player_index", ascending=False)
+    
+    df_out = merged.reset_index()
+    if "topic" in df_out.columns:
+        df_out = df_out.rename(columns={"topic": "player"})
+    return df_out.sort_values("player_index", ascending=False)
 
 def export_excel(df):
     wb = Workbook()
