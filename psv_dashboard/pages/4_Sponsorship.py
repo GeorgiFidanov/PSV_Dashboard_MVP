@@ -16,7 +16,7 @@ if sponsorship.empty:
     st.info("No sponsorship data available.")
     st.stop()
 
-st.subheader("📈 ROI by Sponsor")
+st.subheader("ROI by Sponsor")
 fig1 = px.bar(
     sponsorship, x="sponsor", y="roi_(%)",
     color="roi_(%)", color_continuous_scale="Greens",
@@ -24,7 +24,7 @@ fig1 = px.bar(
 )
 st.plotly_chart(fig1, use_container_width=True)
 
-st.subheader("📣 Engagement Rate per Platform")
+st.subheader("Engagement Rate per Platform")
 fig2 = px.scatter(
     sponsorship, x="reach", y="engagement_rate",
     color="platform", size="mentions",

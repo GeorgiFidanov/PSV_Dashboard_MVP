@@ -22,7 +22,7 @@ p2 = st.selectbox("Select Player 2", players["name"].unique())
 
 subset = players[players["name"].isin([p1, p2])]
 
-st.subheader("📊 Market Value & Sentiment")
+st.subheader("Market Value & Sentiment")
 fig1 = px.scatter(
     subset, x="market_value_eur", y="performance_score",
     color="name", size="mentions", hover_name="name",
@@ -31,7 +31,7 @@ fig1 = px.scatter(
 )
 st.plotly_chart(fig1, use_container_width=True)
 
-st.subheader("🏆 Player Stats Overview")
+st.subheader("Player Stats Overview")
 fig2 = px.bar(
     subset.melt(id_vars=["name"], value_vars=["goals", "assists"]),
     x="variable", y="value", color="name",

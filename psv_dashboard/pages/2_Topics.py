@@ -16,7 +16,7 @@ if topics.empty:
     st.info("No topic data available.")
     st.stop()
 
-st.subheader("🔥 Top Topics by Mentions")
+st.subheader("Top Topics by Mentions")
 fig1 = px.bar(
     topics.sort_values("mentions", ascending=False).head(10),
     x="mentions", y="topic", orientation="h",
@@ -25,7 +25,7 @@ fig1 = px.bar(
 )
 st.plotly_chart(fig1, use_container_width=True)
 
-st.subheader("💬 Topic Sentiment Overview")
+st.subheader("Topic Sentiment Overview")
 fig2 = px.scatter(
     topics,
     x="pos_sentiment_(%)", y="neg_sentiment_(%)",

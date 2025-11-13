@@ -16,7 +16,7 @@ if rep.empty:
     st.info("No reputation data available.")
     st.stop()
 
-st.subheader("🏙️ Reputation Score by Region")
+st.subheader("Reputation Score by Region")
 fig1 = px.bar(
     rep, x="reputation_score", y="region",
     orientation="h", color="reputation_score",
@@ -25,7 +25,7 @@ fig1 = px.bar(
 )
 st.plotly_chart(fig1, use_container_width=True)
 
-st.subheader("📰 Sentiment per Source")
+st.subheader("Sentiment per Source")
 fig2 = px.scatter(
     rep, x="pos_sentiment_(%)", y="neg_sentiment_(%)",
     size="mentions", color="source",

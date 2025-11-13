@@ -28,7 +28,7 @@ fig = px.bar(pi.head(20), x="player_index", y="player", orientation="h", color="
 st.plotly_chart(fig, use_container_width=True)
 st.dataframe(pi)
 
-st.subheader("💰 Market Value Correlation (Sponsors View)")
+st.subheader("Market Value Correlation (Sponsors View)")
 if not players.empty:
     merged = pd.merge(players.rename(columns=str.lower), pi, left_on="name", right_on="player", how="left")
     merged = merged.dropna(subset=["market_value_eur","player_index"])

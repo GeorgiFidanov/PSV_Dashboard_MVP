@@ -7,7 +7,7 @@ from utils import load_all_cleaned, compute_player_index, data_freshness_label, 
 import pandas as pd
 
 st.set_page_config(page_title="PSV Dashboard", layout="wide")
-st.title("⚽ PSV Unified Marketing Insights — MVP")
+st.title("PSV Unified Marketing Insights — MVP")
 st.caption("Marketing Intelligence • Player Value • Fan Sentiment • Reputation Tracking")
 
 # Load data
@@ -20,9 +20,9 @@ posts = frames.get("socials_overview", pd.DataFrame())
 st.sidebar.header("Filters")
 period = st.sidebar.selectbox("Period", ["Last 7 days", "Last 30 days", "Season"])
 platforms = st.sidebar.multiselect("Platforms", ["Facebook","Instagram","TikTok","YouTube","Twitter/X"])
-st.sidebar.markdown(f"🕓 {data_freshness_label()}")
+st.sidebar.markdown(f"Last updated: {data_freshness_label()}")
 
-st.markdown("### 🧭 Overall Club Sentiment")
+st.markdown("### Overall Club Sentiment")
 if not social.empty or not news.empty:
     soc = social[["pos_sentiment_(%)","neg_sentiment_(%)","neu_sentiment_(%)"]].mean()
     nws = news[["pos_sentiment_(%)","neg_sentiment_(%)","neu_sentiment_(%)"]].mean()
